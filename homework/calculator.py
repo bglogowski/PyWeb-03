@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 """
 For your homework this week, you'll be creating a wsgi application of
 your own.
@@ -43,43 +45,115 @@ To submit your homework:
 """
 
 
-def add(*args):
-    """ Returns a STRING with the sum of the arguments """
 
-    # TODO: Fill sum with the correct value, based on the
-    # args provided.
-    sum = "0"
+def help():
 
-    return sum
+    help_html = """
+    calculator.py supports the following operations:
+    <ul>
+    <li>Addition</li>
+    <li>Subtraction</li>
+    <li>Multiplication</li>
+    <li>Division</li>
+    </ul><br>
+    Examples:<br>
+    http://localhost:8080/multiply/3/5   => 15<br>
+    http://localhost:8080/add/23/42      => 65<br>
+    http://localhost:8080/subtract/23/42 => -19<br>
+    http://localhost:8080/divide/22/11   => 2<br>
+    http://localhost:8080/divide/6/0     => HTTP '400 Bad Request'<br>"""
 
-# TODO: Add functions for handling more arithmetic operations.
+    return help_html.encode('utf8')
+
+
+def html_format(text):
+    """
+    Formats answers to return to the HTTP client
+    """
+    return str(text).encode('utf8')
+
+def add(x, y):
+    return(html_format(x + y))
+
+def subtract(x, y):
+    return(html_format(x - y))
+
+def multiply(x, y):
+    return(html_format(x * y))
+
+def divide(x, y):
+    """
+    Should return the integer result of dividing two numbers
+    """
+    try:
+        answer = x / y
+    except:
+        raise ValueError
+    return(html_format(int(answer)))
+
+
+# Map the command strings to functions
+func_map = { 'add': add,
+             'subtract': subtract,
+             'multiply': multiply,
+             'divide': divide
+           }
+
 
 def resolve_path(path):
     """
     Should return two values: a callable and an iterable of
     arguments.
     """
+    p = path.strip('/').split('/')
 
-    # TODO: Provide correct values for func and args. The
-    # examples provide the correct *syntax*, but you should
-    # determine the actual values of func and args using the
-    # path.
-    func = add
-    args = ['25', '32']
+    if len(p) < 3:
+        return help()
 
-    return func, args
+    elif len(p) == 3:
+        f = func_map[str(p[0])]
+        x = int(p[1])
+        y = int(p[2])
+        return f(x, y)
+
+    else:
+        raise NameError
+
+
 
 def application(environ, start_response):
-    # TODO: Your application code from the book database
-    # work here as well! Remember that your application must
-    # invoke start_response(status, headers) and also return
-    # the body of the response in BYTE encoding.
-    #
-    # TODO (bonus): Add error handling for a user attempting
-    # to divide by zero.
-    pass
+
+    headers = [('Content-type', 'text/html; charset=utf-8')]
+
+    try:
+        path = environ.get('PATH_INFO', None)
+        body = resolve_path(path)
+        status = '200 OK'
+
+    except ValueError:
+        status = '400 Bad Request'
+        body = '<b>400</b> Bad Request<p><i>The server will not process the request due to an apparent client error.</i></p>'.encode('utf8')
+        body += help()
+
+    except NameError:
+        status = '404 Not Found'
+        body = '<b>404</b> Not Found<p><i>The requested resource could not be found.</i></p>'.encode('utf8')
+        body += help()
+
+    except Exception:
+        status = '500 Internal Server Error'
+        body = '<b>500</b> Internal Server Error<p><i>An unexpected condition was encountered.</i></p>'.encode('utf8')
+        body += help()
+
+    finally:
+        headers.append(('Content-length', str(len(body))))
+        start_response(status, headers)
+
+        return [body]
+
 
 if __name__ == '__main__':
-    # TODO: Insert the same boilerplate wsgiref simple
-    # server creation that you used in the book database.
-    pass
+    from wsgiref.simple_server import make_server
+    srv = make_server('localhost', 8080, application)
+    srv.serve_forever()
+
